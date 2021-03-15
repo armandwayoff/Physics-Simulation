@@ -4,12 +4,14 @@ import random as rd
 
 
 class Particle:
-    def __init__(self, x, y, vx, vy):
+    def __init__(self, x, y, vx, vy, r):
         self.x = x
         self.y = y
         self.vx = vx
         self.vy = vy
         self.color = BLACK
+        self.r = r
+        self.m = r**2*10**(-27)
 
     def display(self):
         pygame.draw.circle(screen, self.color, [self.x, self.y], RADIUS)
@@ -35,35 +37,130 @@ def dist(x1, y1, x2, y2):
 
 
 def collision(p1, p2):
-    pygame.draw.line(screen, BLACK, (p1.x, p1.y), (p2.x, p2.y))
+    x1, y1, vx1, vy1, x2, y2, vx2, vy2 = p1.x , p1.y, p1.vx, p1.vy, p2.x , p2.y, p2.vx, p2.vy
+    m1, m2 = p1.m, p2.m
+    
+    d = dist(x1,y1,x2,y2)
+ 
+    vRcmx = (vx1*m1+vx2*m2)/(m1+m2)
+    vRcmy = (vy1*m1+vy2*m2)/(m1+m2)
+    vx1, vx2, vy1, vy2 = vx1 - vRcmx, vx2- vRcmx, vy1- vRcmy, vy2 - vRcmy
+    try:
+        pente_normale = (y1-y2)/(x1-x2)
+        theta = math.atan(pente_normale)
+        
+        if d < (p1.r + p2.r) * 2 /3 :
+            """
+            Ceci sert à essayer d'empêcher les fusions des particules
+            """
+            écart = p1.r + p2.r - d
+            if p1.x < p2.x:
+                p1.x += - (écart/2) * math.cos(theta)
+                p2.x += (écart /2) * math.cos(theta)
+                p1.y += - (écart /2) * math.sin(theta)
+                p2.y += (écart /2) * math.sin(theta)
+            else:
+                p1.x += (écart /2) * math.cos(theta)
+                p2.x += - (écart /2) * math.cos(theta)
+                p1.y += (écart /2) * math.sin(theta)
+                p2.y += - (écart /2) * math.sin(theta)
+        # l'angle en radians entre x et eN
+    except ZeroDivisionError:
+        theta = math.pi/2
+        sens = (p1.y-p2.y)/abs(p1.y-p2.y)
+        if d < p1.r + p2.r :
+            p1.y = p1.y - (p1.r+p2.r- d)/2 * sens
+            p2.y = p2.y + (p1.r+p2.r -d)/2 * sens
 
-    # angles
-    angle_collision_line = math.atan2(p2.y - p1.y, p2.x - p1.x)
+    # Dans le nouvrau repère les vitesses sont selon les axes n et t (après une figure de changement de base)
+    vn1, vt1 = math.cos(theta)*vx1 + math.sin(theta) * vy1, -math.sin(theta) * vx1 + math.cos(theta) * vy1
+    vn2, vt2 = math.cos(theta)*vx2 + math.sin(theta) * vy2, -math.sin(theta) * vx2 + math.cos(theta) * vy2
+    # pendant le choc seules les vitesses selon eN vont être changées, celles selon eT restent constantes, on a donc après le choc, 
+    # Dans le référentiel du centre des masses, les vitesses (totales de chacune des deux particules) conservent leur norme 
+    # Il ne nous reste plus qu'à déterminer la vitesse de déplacement du référentiel du centre des masses, et par la formule de changement de point on obtiendra
+    # les véritables vitesses en sortie 
+    # vn1s, vn2s = -vn1, -vn2 # Solution simpliste
 
-    angle_v1_horizon = math.atan(p1.vy/p1.vx)
-    angle_v2_horizon = math.atan(p2.vy/p2.vx)
-    angle_v1_collision_line = angle_collision_line + angle_v1_horizon
-    angle_v2_collision_line = angle_collision_line + angle_v2_horizon
+    # Si on considère que les angles sont les mêmes à la sortie on a, si on considère que la composante tangentielle se conserve
+    vn1s = (2 * m2 * vn2 + vn1 * (m1 - m2))/(m1+m2)
+    vn2s = (2 * m1 * vn1 + vn2 * (m2 - m1))/(m1+m2)
+    vx1s, vy1s = vn1s * math.cos(theta) - math.sin(theta) * vt1 + vRcmx, vn1s * math.sin(theta) + vt1 * math.cos(theta) + vRcmy
+    vx2s, vy2s = vn2s * math.cos(theta) - math.sin(theta) * vt2 + vRcmx, vn2s * math.sin(theta) + vt2 * math.cos(theta) + vRcmy
+    
+    p1.vx = vx1s 
+    p1.vy = vy1s 
+    p2.vx = vx2s 
+    p2.vy = vy2s
 
-    # composantes des vecteurs vitesse selon la droite de collision
-    norme_v1 = dist(0, 0, p1.vx, p1.vy)
-    norme_v2 = dist(0, 0, p2.vx, p2.vy)
-    v1x_horizon = norme_v1 * math.cos(angle_v1_collision_line)
-    v2x_horizon = norme_v2 * math.cos(angle_v2_collision_line)
+# les programmes de tri
+def insertion_sort(array): # insertion sortting algorithum takes place
+    """
+    Program from pavankalyan siramkalyan on github : https://github.com/siramkalyan/Timsort/blob/master/timsort.py
+    """
+    for x in range (1, len(array)):
+        for i in range(x, 0, -1):
+            if particles[array[i]].x < particles[array[i - 1]].x:
+                t = array[i]
+                array[i] = array[i - 1]
+                array[i - 1] = t
+            else:
+                break
+            i = i - 1
+    return array
 
-    # p1.vx = v2x_horizon
-    # p2.vx = v1x_horizon
+def merge(aArr, bArr):
+    
+    a = 0
+    b = 0
+    cArr = []
 
+    while a < len(aArr) and b < len(bArr):
+        if particles[aArr[a]].x < particles[bArr[b]].x:
+            cArr.append(aArr[a])
+            a = a + 1
+        elif particles[aArr[a]].x > particles[bArr[b]].x:
+            cArr.append(bArr[b])
+            b = b + 1
+        else:
+            cArr.append(aArr[a])
+            cArr.append(bArr[b])
+            a = a + 1
+            b = b + 1
+
+    while a < len(aArr):
+        cArr.append(aArr[a])
+        a = a + 1
+
+    while b < len(bArr):
+        cArr.append(bArr[b])
+        b = b + 1
+
+    return cArr
+
+def tim_sort():
+
+    for x in range(0, len(order), RUN):
+        order[x : x + RUN] = insertion_sort(order[x : x + RUN])
+    RUNinc = RUN
+    while RUNinc < len(order):
+        for x in range(0, len(order), 2 * RUNinc):
+            order[x : x + 2 * RUNinc] = merge(order[x : x + RUNinc], order[x + RUNinc: x + 2 * RUNinc])
+        RUNinc = RUNinc * 2
+# fin des programmes de tri
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 
-DIMENSION_RATIO = 1
-SCREEN_HEIGHT = 700
+DIMENSION_RATIO = 2
+SCREEN_HEIGHT = 650
 SCREEN_WIDTH = SCREEN_HEIGHT * DIMENSION_RATIO
-RADIUS = 3
+RMAX = 6
 NUMBER_OF_PARTICLE = 50
+
+# définir la clock pour les FPS
+clock = pygame.time.Clock()
+FPS = 100
 
 launched = True
 
@@ -72,6 +169,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Particle motion")
 
 particles = []
+order = []
 for i in range(NUMBER_OF_PARTICLE):
     x = rd.randint(RADIUS, SCREEN_WIDTH - RADIUS)
     y = rd.randint(RADIUS, SCREEN_HEIGHT - RADIUS)
