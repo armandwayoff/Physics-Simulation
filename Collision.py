@@ -14,20 +14,20 @@ class Particle:
         self.m = r**2*10**(-27)
 
     def display(self):
-        pygame.draw.circle(screen, self.color, [self.x, self.y], RADIUS)
+        pygame.draw.circle(screen, self.color, [self.x, self.y], self.r)
 
     def motion(self):
         self.x += self.vx
         self.y += self.vy
 
     def boundaries(self):
-        if self.x + self.vx <= RADIUS or self.x + self.vx >= SCREEN_WIDTH - RADIUS:
+        if self.x + self.vx <= self.r or self.x + self.vx >= SCREEN_WIDTH - self.r:
             self.vx = -self.vx
-        if self.y + self.vy <= RADIUS or self.y + self.vy >= SCREEN_HEIGHT - RADIUS:
+        if self.y + self.vy <= self.r or self.y + self.vy >= SCREEN_HEIGHT - self.r:
             self.vy = -self.vy
 
     def collision(self, otherParticle):
-        if dist(self.x, self.y, otherParticle.x, otherParticle.y) <= 2 * RADIUS:
+        if dist(self.x, self.y, otherParticle.x, otherParticle.y) <= self.r + otherParticle.r:
             return True
         return False
 
@@ -156,7 +156,7 @@ DIMENSION_RATIO = 2
 SCREEN_HEIGHT = 650
 SCREEN_WIDTH = SCREEN_HEIGHT * DIMENSION_RATIO
 RMAX = 6
-NUMBER_OF_PARTICLE = 50
+NUMBER_OF_PARTICLE = 200
 
 # définir la clock pour les FPS
 clock = pygame.time.Clock()
@@ -171,26 +171,46 @@ pygame.display.set_caption("Particle motion")
 particles = []
 order = []
 for i in range(NUMBER_OF_PARTICLE):
-    x = rd.randint(RADIUS, SCREEN_WIDTH - RADIUS)
-    y = rd.randint(RADIUS, SCREEN_HEIGHT - RADIUS)
-    vx = rd.uniform(0.1, 6)
-    vy = rd.uniform(0.1, 6)
-    particles.append(Particle(x, y, vx, vy))
+    r = rd.randint(1, RMAX)
+    x = rd.randint(r, SCREEN_WIDTH - r)
+    y = rd.randint(r, SCREEN_HEIGHT - r)
+    vx = rd.uniform(-1, 1)
+    vy = rd.uniform(-1, 1)
+    particles.append(Particle(x, y, vx, vy, r))
+    order.append(i)
 
 p1 = particles[0]
 p2 = particles[1]
+
+# cette variable sert pour le tri
+RUN = int(math.sqrt(NUMBER_OF_PARTICLE))
 
 while launched:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             launched = False
     screen.fill(WHITE)
-
-    for p in particles:
+    
+    # On effectue le tri selon les abscisses des particules
+    tim_sort()
+    
+    # on regarde s'il y a des collisions de façon optimisée
+    ind = 0
+    for ind in range(len(order)):
+        p = particles[order[ind]]
         p.display()
         p.boundaries()
         p.motion()
-        for otherParticle in particles:
+        
+        for otherindice in order[ind+1:]:
+            otherParticle = particles[otherindice]
             if p != otherParticle and p.collision(otherParticle):
                 collision(p, otherParticle)
+                break
+            if otherParticle.x > p.x + p.r + RMAX:
+                break
+    
     pygame.display.update()
+    
+    # on se sert du nombre de FPS
+    clock.tick(FPS)
